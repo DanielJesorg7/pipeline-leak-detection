@@ -1,0 +1,69 @@
+/* Main layout */
+.main-header {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #1f77b4;
+}
+
+/* Sensor cards */
+.sensor-card {
+    padding: 20px;
+    border-radius: 10px;
+    border: 1px solid #e0e0e0;
+    margin: 10px 0;
+    background: #fafafa;
+}
+
+.metric-value {
+    font-size: 1.8rem;
+    font-weight: bold;
+    margin: 10px 0;
+}
+
+/* Status badges */
+.status-normal {
+    color: #28a745;
+    background: #d4edda;
+    padding: 5px 15px;
+    border-radius: 20px;
+    font-weight: bold;
+}
+
+.status-warning {
+    color: #856404;
+    background: #fff3cd;
+    padding: 5px 15px;
+    border-radius: 20px;
+    font-weight: bold;
+}
+
+.status-critical {
+    color: #721c24;
+    background: #f8d7da;
+    padding: 5px 15px;
+    border-radius: 20px;
+    font-weight: bold;
+}
+
+/* Alert boxes */
+.leak-alert {
+    background: #f8d7da;
+    border: 2px solid #dc3545;
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+}
+
+.normal-alert {
+    background: #d4edda;
+    border: 2px solid #28a745;
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+}
+
+/* Sidebar */
+.sidebar-section {
+    padding: 15px 0;
+    border-bottom: 1px solid #e0e0e0;
+}
