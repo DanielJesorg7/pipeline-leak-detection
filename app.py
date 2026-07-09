@@ -11,6 +11,7 @@ import json
 import numpy as np
 from datetime import datetime
 import plotly.graph_objects as go
+import time
 
 # ─── Page Config ─────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -89,6 +90,7 @@ for key, default in [
     ("history", []),
     ("reading_count", 0),
     ("leak_count", 0),
+    ("monitoring", False),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
@@ -117,8 +119,8 @@ def generate_reading():
         "temperature":    float(rng.uniform(20, 25)),
         "vibration":      float(rng.uniform(0.2, 0.75)),
         "acoustic_level": float(rng.uniform(24, 37)),
-        "pressure_drop":  float(rng.uniform(0, 3.5)),
-        "flow_anomaly":   float(rng.uniform(0, 3.5)),
+        "pressure_drop":  float(rng.uniform(0, 1.0)),
+        "flow_anomaly":   float(rng.uniform(0, 1.0)),
         "is_leak": False,
     }
 
@@ -131,7 +133,7 @@ def run_prediction(reading):
 
 
 def sensor_status(value, ok_lo, ok_hi, warn_lo, warn_hi):
-    if ok_lo <= value <= ok_hi:   return "normal"
+    if ok_lo <= value <= ok_hi:     return "normal"
     if warn_lo <= value <= warn_hi: return "warning"
     return "critical"
 
@@ -171,9 +173,16 @@ def make_gauge(prob):
     return fig
 
 
-def render_dashboard(reading, pred, prob):
-    """Render the full sensor dashboard given a reading and prediction."""
+def store_reading(reading):
+    st.session_state.history.append(reading)
+    st.session_state.reading_count += 1
+    if reading["is_leak"]:
+        st.session_state.leak_count += 1
+    if len(st.session_state.history) > 60:
+        st.session_state.history = st.session_state.history[-60:]
 
+
+def render_dashboard(reading, pred, prob):
     # Alert banner
     if pred == 1:
         st.markdown(f"""<div class="alert-leak">
@@ -201,7 +210,7 @@ def render_dashboard(reading, pred, prob):
         with c6: sensor_card("📉", "Pressure Drop", reading["pressure_drop"], "",    sensor_status(reading["pressure_drop"],  0,5,5,15))
         with c7: sensor_card("⚡", "Flow Anomaly",  reading["flow_anomaly"],  "",    sensor_status(reading["flow_anomaly"],   0,5,5,15))
         risk_status = "critical" if prob > 0.6 else "warning" if prob > 0.3 else "normal"
-        with c8: sensor_card("🎯", "Leak Risk",     prob*100,                 "%",   risk_status)
+        with c8: sensor_card("🎯", "Leak Risk",     prob*100, "%", risk_status)
 
         if len(st.session_state.history) > 2:
             st.markdown("##### Sensor History")
@@ -220,7 +229,6 @@ def render_dashboard(reading, pred, prob):
             importance = pd.DataFrame({"Feature": features, "Importance": model.feature_importances_}) \
                            .sort_values("Importance", ascending=False)
             st.bar_chart(importance.set_index("Feature"), height=280)
-
             top = importance.iloc[0]
             st.markdown(f"""<div class="info-panel"><h4>Prediction Breakdown</h4>
                 <p style="color:#cbd5e1;font-size:0.9rem;margin:0">
@@ -278,13 +286,18 @@ if mode == "Real-time Monitoring":
     st.sidebar.markdown("---")
     st.sidebar.markdown("**Monitoring Controls**")
 
-    new_reading = st.sidebar.button("▶ Generate New Reading", type="primary", use_container_width=True)
+    c1, c2 = st.sidebar.columns(2)
+    with c1:
+        if st.button("▶ Start", type="primary", use_container_width=True):
+            st.session_state.monitoring = True
+    with c2:
+        if st.button("⏹ Stop", use_container_width=True):
+            st.session_state.monitoring = False
 
-    if st.sidebar.button("🗑 Clear History", use_container_width=True):
-        st.session_state.history = []
-        st.session_state.reading_count = 0
-        st.session_state.leak_count = 0
-        st.rerun()
+    interval = st.sidebar.slider("Refresh interval (s)", 2, 10, 3)
+
+    status_label = "🟢 Running" if st.session_state.monitoring else "🔴 Stopped"
+    st.sidebar.markdown(f"**Status:** {status_label}")
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("**Session Stats**")
@@ -293,6 +306,13 @@ if mode == "Real-time Monitoring":
     if st.session_state.reading_count > 0:
         rate = st.session_state.leak_count / st.session_state.reading_count * 100
         st.sidebar.metric("Leak Rate", f"{rate:.1f}%")
+
+    if st.sidebar.button("🗑 Clear History", use_container_width=True):
+        st.session_state.history = []
+        st.session_state.reading_count = 0
+        st.session_state.leak_count = 0
+        st.session_state.monitoring = False
+        st.rerun()
 
     if st.session_state.history:
         st.sidebar.markdown("---")
@@ -303,21 +323,27 @@ if mode == "Real-time Monitoring":
 
 # ─── Main Content ─────────────────────────────────────────────────────────────
 if mode == "Real-time Monitoring":
-    if new_reading:
-        reading = generate_reading()
-        st.session_state.history.append(reading)
-        st.session_state.reading_count += 1
-        if reading["is_leak"]:
-            st.session_state.leak_count += 1
-        if len(st.session_state.history) > 60:
-            st.session_state.history = st.session_state.history[-60:]
 
-    if not st.session_state.history:
-        st.info("👆 Click **Generate New Reading** in the sidebar to begin monitoring.")
-    else:
+    # KEY FIX: generate + render BEFORE the sleep/rerun
+    # so content is always visible on screen
+    if st.session_state.monitoring:
+        reading = generate_reading()
+        store_reading(reading)
+        pred, prob = run_prediction(reading)
+        render_dashboard(reading, pred, prob)
+        # sleep AFTER rendering so the user sees content,
+        # then page refreshes to get the next reading
+        time.sleep(interval)
+        st.rerun()
+
+    elif st.session_state.history:
+        # Stopped but show last reading
         reading = st.session_state.history[-1]
         pred, prob = run_prediction(reading)
         render_dashboard(reading, pred, prob)
+
+    else:
+        st.info("👆 Click **▶ Start** in the sidebar to begin real-time monitoring.")
 
 else:
     # Manual Analysis
@@ -343,12 +369,7 @@ else:
             "timestamp": datetime.now().strftime("%H:%M:%S"), "is_leak": False,
         }
         pred, prob = run_prediction(manual)
-        # Add to history so charts work
-        st.session_state.history.append(manual)
-        st.session_state.reading_count += 1
-        if pred == 1:
-            st.session_state.leak_count += 1
-
+        store_reading(manual)
         render_dashboard(manual, pred, prob)
 
 
