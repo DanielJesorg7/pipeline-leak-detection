@@ -75,14 +75,14 @@ html, body, [class*="css"] { font-family: 'IBM Plex Sans', sans-serif; }
 
 
 # ─── Model Loading ────────────────────────────────────────────────────────────
-@st.cache_resource
-def load_model():
+@st.cache_resource(max_entries=1)
+def load_model_v2():
     model = joblib.load("my_leak_detector.pkl")
     with open("features.json") as f:
         features = json.load(f)
     return model, features
 
-model, features = load_model()
+model, features = load_model_v2()
 
 
 # ─── Session State ────────────────────────────────────────────────────────────
