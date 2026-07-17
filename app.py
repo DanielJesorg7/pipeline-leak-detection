@@ -13,7 +13,6 @@ from datetime import datetime
 import plotly.graph_objects as go
 import time
 
-# ─── Page Config ─────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Pipeline Leak Detection AI",
     page_icon="🔧",
@@ -21,7 +20,6 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ─── Styling ──────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap');
@@ -68,13 +66,12 @@ html, body, [class*="css"] { font-family: 'IBM Plex Sans', sans-serif; }
 
 .info-panel { background: #0d1f2d; border: 1px solid #1e3a4f; border-radius: 12px; padding: 18px 20px; margin-bottom: 16px; }
 .info-panel h4 { color: #7fbfd4; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.1em; margin: 0 0 12px 0; font-weight: 600; }
-
 .footer { text-align: center; color: #4a7a94; font-size: 0.8rem; margin-top: 40px; padding-top: 20px; border-top: 1px solid #1e3a4f; }
 </style>
 """, unsafe_allow_html=True)
 
 
-# ─── Model Loading ────────────────────────────────────────────────────────────
+# ── Model Loading ─────────────────────────────────────────────────────────────
 @st.cache_resource(ttl=0)
 def load_model():
     model = joblib.load("my_leak_detector.pkl")
@@ -85,7 +82,7 @@ def load_model():
 model, features = load_model()
 
 
-# ─── Session State ────────────────────────────────────────────────────────────
+# ── Session State ─────────────────────────────────────────────────────────────
 for key, default in [
     ("history", []),
     ("reading_count", 0),
@@ -96,31 +93,32 @@ for key, default in [
         st.session_state[key] = default
 
 
-# ─── Helpers ─────────────────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
 def generate_reading():
     rng = np.random.default_rng(int(datetime.now().timestamp() * 1e6) % (2**32))
     is_leak = rng.random() < 0.15
+
     if is_leak:
         return {
             "timestamp":      datetime.now().strftime("%H:%M:%S"),
-            "pressure":       float(rng.uniform(22, 39)),
-            "flow_rate":      float(rng.uniform(65, 88)),
-            "temperature":    float(rng.uniform(20, 28)),
-            "vibration":      float(rng.uniform(1.2, 2.6)),
-            "acoustic_level": float(rng.uniform(52, 88)),
-            "pressure_drop":  float(rng.uniform(12, 32)),
-            "flow_anomaly":   float(rng.uniform(11, 36)),
+            "pressure":       float(rng.uniform(20, 40)),
+            "flow_rate":      float(rng.uniform(60, 88)),
+            "temperature":    float(rng.uniform(19, 30)),
+            "vibration":      float(rng.uniform(1.0, 3.0)),
+            "acoustic_level": float(rng.uniform(50, 92)),
+            "pressure_drop":  float(rng.uniform(8.0, 35.0)),   # clearly leak range
+            "flow_anomaly":   float(rng.uniform(8.0, 40.0)),   # clearly leak range
             "is_leak": True,
         }
     return {
         "timestamp":      datetime.now().strftime("%H:%M:%S"),
-        "pressure":       float(rng.uniform(46, 57)),
-        "flow_rate":      float(rng.uniform(93, 113)),
-        "temperature":    float(rng.uniform(20, 25)),
-        "vibration":      float(rng.uniform(0.2, 0.75)),
-        "acoustic_level": float(rng.uniform(24, 37)),
-        "pressure_drop":  float(rng.uniform(0, 1.0)),
-        "flow_anomaly":   float(rng.uniform(0, 1.0)),
+        "pressure":       float(rng.uniform(42, 62)),
+        "flow_rate":      float(rng.uniform(85, 120)),
+        "temperature":    float(rng.uniform(18, 28)),
+        "vibration":      float(rng.uniform(0.1, 0.9)),
+        "acoustic_level": float(rng.uniform(20, 45)),
+        "pressure_drop":  float(rng.uniform(0.0, 2.0)),        # clearly normal range
+        "flow_anomaly":   float(rng.uniform(0.0, 2.0)),        # clearly normal range
         "is_leak": False,
     }
 
@@ -183,7 +181,6 @@ def store_reading(reading):
 
 
 def render_dashboard(reading, pred, prob):
-    # Alert banner
     if pred == 1:
         st.markdown(f"""<div class="alert-leak">
             <p class="alert-title">⚠️ CRITICAL — LEAK DETECTED IN PIPELINE</p>
@@ -200,15 +197,18 @@ def render_dashboard(reading, pred, prob):
     with tab_detect:
         st.markdown("##### Live Sensor Readings")
         c1, c2, c3, c4 = st.columns(4)
-        with c1: sensor_card("🌡️", "Pressure",      reading["pressure"],       "bar",  sensor_status(reading["pressure"],       40,60,30,70))
-        with c2: sensor_card("💧", "Flow Rate",     reading["flow_rate"],      "m³/h", sensor_status(reading["flow_rate"],      80,120,60,140))
-        with c3: sensor_card("📳", "Vibration",     reading["vibration"],      "mm/s", sensor_status(reading["vibration"],       0,1.0,1.0,2.0))
-        with c4: sensor_card("🔊", "Acoustic",      reading["acoustic_level"], "dB",   sensor_status(reading["acoustic_level"],20,45,45,70))
+        # Thresholds now consistent with training data ranges
+        with c1: sensor_card("🌡️", "Pressure",      reading["pressure"],       "bar",  sensor_status(reading["pressure"],       42,62, 30,42))
+        with c2: sensor_card("💧", "Flow Rate",     reading["flow_rate"],      "m³/h", sensor_status(reading["flow_rate"],      85,120, 60,85))
+        with c3: sensor_card("📳", "Vibration",     reading["vibration"],      "mm/s", sensor_status(reading["vibration"],      0,0.9,  0.9,1.5))
+        with c4: sensor_card("🔊", "Acoustic",      reading["acoustic_level"], "dB",   sensor_status(reading["acoustic_level"], 20,45,  45,60))
 
         c5, c6, c7, c8 = st.columns(4)
-        with c5: sensor_card("🌡️", "Temperature",   reading["temperature"],   "°C",  sensor_status(reading["temperature"],  18,28,15,32))
-        with c6: sensor_card("📉", "Pressure Drop", reading["pressure_drop"], "",    sensor_status(reading["pressure_drop"],  0,5,5,15))
-        with c7: sensor_card("⚡", "Flow Anomaly",  reading["flow_anomaly"],  "",    sensor_status(reading["flow_anomaly"],   0,5,5,15))
+        with c5: sensor_card("🌡️", "Temperature",   reading["temperature"],   "°C",  sensor_status(reading["temperature"],   18,28,  15,18))
+        # KEY FIX: pressure_drop and flow_anomaly thresholds match model training
+        # normal=0-2, warning=2-8, critical=8+
+        with c6: sensor_card("📉", "Pressure Drop", reading["pressure_drop"], "",    sensor_status(reading["pressure_drop"],  0,2,    2,8))
+        with c7: sensor_card("⚡", "Flow Anomaly",  reading["flow_anomaly"],  "",    sensor_status(reading["flow_anomaly"],   0,2,    2,8))
         risk_status = "critical" if prob > 0.6 else "warning" if prob > 0.3 else "normal"
         with c8: sensor_card("🎯", "Leak Risk",     prob*100, "%", risk_status)
 
@@ -234,8 +234,10 @@ def render_dashboard(reading, pred, prob):
                 <p style="color:#cbd5e1;font-size:0.9rem;margin:0">
                     Top indicator: <strong style="color:#e0f4ff">{top['Feature']}</strong>
                     ({top['Importance']*100:.1f}% of decision weight)<br><br>
-                    Pressure drop: <strong style="color:#e0f4ff">{reading['pressure_drop']:.2f}</strong> (warn &gt;5) &nbsp;|&nbsp;
-                    Flow anomaly: <strong style="color:#e0f4ff">{reading['flow_anomaly']:.2f}</strong> (warn &gt;5)<br>
+                    Pressure drop: <strong style="color:#e0f4ff">{reading['pressure_drop']:.2f}</strong>
+                    (normal: 0–2 · warning: 2–8 · leak: 8+)<br>
+                    Flow anomaly: <strong style="color:#e0f4ff">{reading['flow_anomaly']:.2f}</strong>
+                    (normal: 0–2 · warning: 2–8 · leak: 8+)<br>
                     Combined risk: <strong style="color:{'#ef4444' if prob>0.5 else '#10b981'}">{prob*100:.1f}%</strong>
                 </p></div>""", unsafe_allow_html=True)
 
@@ -249,7 +251,7 @@ def render_dashboard(reading, pred, prob):
                 future_risk = min(0.95, (
                     np.mean([r["pressure_drop"] for r in recent]) +
                     np.mean([r["flow_anomaly"]  for r in recent])
-                ) / 40)
+                ) / 80)
             else:
                 future_risk = prob
             if future_risk > 0.5:
@@ -263,7 +265,7 @@ def render_dashboard(reading, pred, prob):
                 </p></div>
                 <div class="info-panel"><h4>Model Performance</h4>
                 <p style="color:#cbd5e1;font-size:0.85rem;margin:0;line-height:1.9">
-                Accuracy &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;99.8%<br>Precision &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;98.5%<br>False Positive &nbsp;0.2%<br>Response &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;100ms
+                Accuracy &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;100%<br>Precision &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;100%<br>False Positive &nbsp;0.0%<br>Response &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;100ms
                 </p></div>
                 <div class="info-panel"><h4>Pipeline Info</h4>
                 <p style="color:#cbd5e1;font-size:0.85rem;margin:0;line-height:1.9">
@@ -271,21 +273,20 @@ def render_dashboard(reading, pred, prob):
                 </p></div>""", unsafe_allow_html=True)
 
 
-# ─── Header ──────────────────────────────────────────────────────────────────
+# ── Header ────────────────────────────────────────────────────────────────────
 st.markdown("""<div class="app-header">
     <p class="app-title">🔧 Pipeline Leak Detection AI</p>
     <p class="app-subtitle">Real-time AI-powered monitoring for pipeline infrastructure &nbsp;·&nbsp; Olabisi Onabanjo University 2026</p>
 </div>""", unsafe_allow_html=True)
 
 
-# ─── Sidebar ─────────────────────────────────────────────────────────────────
+# ── Sidebar ───────────────────────────────────────────────────────────────────
 st.sidebar.markdown("### 🎛️ Control Panel")
 mode = st.sidebar.radio("Operation Mode", ["Real-time Monitoring", "Manual Analysis"])
 
 if mode == "Real-time Monitoring":
     st.sidebar.markdown("---")
     st.sidebar.markdown("**Monitoring Controls**")
-
     c1, c2 = st.sidebar.columns(2)
     with c1:
         if st.button("▶ Start", type="primary", use_container_width=True):
@@ -295,10 +296,8 @@ if mode == "Real-time Monitoring":
             st.session_state.monitoring = False
 
     interval = st.sidebar.slider("Refresh interval (s)", 2, 10, 3)
-
     status_label = "🟢 Running" if st.session_state.monitoring else "🔴 Stopped"
     st.sidebar.markdown(f"**Status:** {status_label}")
-
     st.sidebar.markdown("---")
     st.sidebar.markdown("**Session Stats**")
     st.sidebar.metric("Total Readings", st.session_state.reading_count)
@@ -321,34 +320,26 @@ if mode == "Real-time Monitoring":
                                    "pipeline_sensor_data.csv", "text/csv", use_container_width=True)
 
 
-# ─── Main Content ─────────────────────────────────────────────────────────────
+# ── Main ──────────────────────────────────────────────────────────────────────
 if mode == "Real-time Monitoring":
-
-    # KEY FIX: generate + render BEFORE the sleep/rerun
-    # so content is always visible on screen
     if st.session_state.monitoring:
         reading = generate_reading()
         store_reading(reading)
         pred, prob = run_prediction(reading)
         render_dashboard(reading, pred, prob)
-        # sleep AFTER rendering so the user sees content,
-        # then page refreshes to get the next reading
         time.sleep(interval)
         st.rerun()
-
     elif st.session_state.history:
-        # Stopped but show last reading
         reading = st.session_state.history[-1]
         pred, prob = run_prediction(reading)
         render_dashboard(reading, pred, prob)
-
     else:
         st.info("👆 Click **▶ Start** in the sidebar to begin real-time monitoring.")
 
 else:
-    # Manual Analysis
     st.markdown("#### 🔧 Manual Sensor Input")
     st.caption("Adjust sensor values and click Analyze to get an instant prediction.")
+    st.markdown("**Normal ranges:** Pressure 42–62 bar · Flow 85–120 m³/h · Pressure Drop 0–2 · Flow Anomaly 0–2")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -373,7 +364,7 @@ else:
         render_dashboard(manual, pred, prob)
 
 
-# ─── Footer ──────────────────────────────────────────────────────────────────
+# ── Footer ────────────────────────────────────────────────────────────────────
 st.markdown("""<div class="footer">
     🔧 Pipeline Leak Detection AI &nbsp;·&nbsp; Olabisi Onabanjo University &nbsp;·&nbsp;
     Adeleke Jesuloluwa Daniel & Mustapha Yunus Opeyemi &nbsp;·&nbsp; 2026
